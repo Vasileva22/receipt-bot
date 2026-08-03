@@ -1,17 +1,18 @@
+import base64
 import json
 import os
 from threading import Thread
-import google.generativeai as genai
 import requests
 import telebot
 from flask import Flask
 
+# Получаем токен телеграма и ключ Gemini из окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-# Используем твой ключ напрямую
-GEMINI_API_KEY = "AQ.Ab8RN6KqG3qQtRTpFZE4o2cjVFjImbU4nY15vdz4hyLw2fPQ"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
+# Создаем простой веб-сервер для Render, чтобы он видел открытый порт
 app = Flask("")
 
 
@@ -44,14 +45,16 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    # Используем официальный эндпоинт Google AI Studio с передачей ключа в заголовке
-    import base64
-
     encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # URL без ключа в строке (для токенов формата AQ.)
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
-    headers = {"Content-Type": "application/json"}
+    # Передаем токен через заголовок Authorization
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
+    }
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
@@ -85,7 +88,7 @@ def handle_receipt(message):
 
     res_json = response.json()
     result_text = (
-        res_json.get("candidates", [{}])
+        res_json.get("candidates", [{}])[0]
         .get("content", {})
         .get("parts", [{}])[0]
         .get("text", "{}")
