@@ -1,5 +1,3 @@
 pyTelegramBotAPI
 Flask
-google-generativeai
-Pillow
 requests
