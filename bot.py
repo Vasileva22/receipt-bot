@@ -2,12 +2,15 @@ import base64
 import json
 import os
 from threading import Thread
+import google.generativeai as genai
 import requests
 import telebot
 from flask import Flask
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+genai.configure(api_key=GEMINI_API_KEY)
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -43,12 +46,17 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
+    # Используем прямой HTTP-запрос с байтами изображения без всяких Pillow (PIL)
     encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    # Передаем ключ классическим способом прямо в URL
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
-    headers = {"Content-Type": "application/json"}
+    # Если ключ формата AQ., передаем как Bearer, если обычный — можно подставить в query.
+    # SDK и API отлично принимают ключ через Bearer для любых типов ключей.
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
+    }
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
