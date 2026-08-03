@@ -9,7 +9,8 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # Настраиваем Gemini
 genai.configure(api_key=GEMINI_API_KEY)
-
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
+bot.remove_webhook()  # Сбрасывает зависший вебхук
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 
