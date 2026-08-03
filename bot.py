@@ -5,9 +5,9 @@ import telebot
 import google.generativeai as genai
 from flask import Flask
 
-# Получаем ключи из окружения Render
+# Получаем токен телеграма из окружения, а ключ Gemini пропишем напрямую
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = "AQ.Ab8RN6LmjaMmY9KHF8JJIc4ULeh1j0na95WKR-IK9qHj-6dneg"
 
 genai.configure(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
