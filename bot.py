@@ -1,20 +1,18 @@
-import io
+import base64
 import json
 import os
 from threading import Thread
-from PIL import Image
-import google.generativeai as genai
+import requests
 import telebot
 from flask import Flask
 
+# Получаем токен Telegram и ключ Groq из переменных окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-# Инициализируем библиотеку Google официальным способом
-genai.configure(api_key=GEMINI_API_KEY)
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
+# Простой веб-сервер для поддержания активности на Render
 app = Flask("")
 
 
@@ -31,14 +29,15 @@ def run_web():
 def send_welcome(bot_message):
   bot.reply_to(
       bot_message,
-      "Привет! Скинь мне фото чека, а я мгновенно вытащу из него все данные.",
+      "Привет! Скинь мне фото чека, а я мгновенно вытащу из него все данные"
+      " через Groq.",
   )
 
 
 @bot.message_handler(content_types=["photo", "document"])
 def handle_receipt(message):
   try:
-    bot.reply_to(message, "⏳ Обрабатываю чек через Gemini...")
+    bot.reply_to(message, "⏳ Обрабатываю чек через Groq Llama Vision...")
 
     if message.content_type == "photo":
       file_info = bot.get_file(message.photo[-1].file_id)
@@ -47,11 +46,16 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    # Открываем картинку через PIL
-    image = Image.open(io.BytesIO(downloaded_file))
+    # Кодируем картинку в base64 для отправки в Groq API
+    encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    # Выбираем актуальную модель
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    # Официальный эндпоинт Groq для мультимодальных моделей
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+    }
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
@@ -62,8 +66,37 @@ def handle_receipt(message):
         " Возвращай только чистый JSON без лишнего текста и без markdown-разметки."
     )
 
-    response = model.generate_content([prompt_text, image])
-    result_text = response.text.strip()
+    payload = {
+        "model": "llama-3.2-11b-vision-preview",
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt_text},
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{encoded_image}"
+                    },
+                },
+            ],
+        }],
+        "temperature": 0.1,
+    }
+
+    response = requests.post(
+        url, headers=headers, data=json.dumps(payload), timeout=30
+    )
+
+    if response.status_code != 200:
+      raise Exception(f"Ошибка API Groq: {response.text}")
+
+    res_json = response.json()
+    result_text = (
+        res_json.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "{}")
+        .strip()
+    )
 
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
