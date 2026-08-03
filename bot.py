@@ -1,18 +1,17 @@
-import base64
-import json
 import os
 from threading import Thread
-import requests
+import google.generativeai as genai
 import telebot
 from flask import Flask
 
-# Получаем токен телеграма и ключ Gemini из окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# Инициализируем библиотеку Google официальным способом
+genai.configure(api_key=GEMINI_API_KEY)
+
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Создаем простой веб-сервер для Render, чтобы он видел открытый порт
 app = Flask("")
 
 
@@ -45,16 +44,14 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
+    # Передаем картинку через официальный объект PIL
+    import io
+    from PIL import Image
 
-    # URL без ключа в строке (для токенов формата AQ.)
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    image = Image.open(io.BytesIO(downloaded_file))
 
-    # Передаем токен через заголовок Authorization
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
-    }
+    # Выбираем актуальную модель
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
@@ -65,40 +62,15 @@ def handle_receipt(message):
         " Возвращай только чистый JSON без лишнего текста и без markdown-разметки."
     )
 
-    payload = {
-        "contents": [{
-            "parts": [
-                {"text": prompt_text},
-                {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
-                        "data": encoded_image,
-                    }
-                },
-            ]
-        }]
-    }
-
-    response = requests.post(
-        url, headers=headers, data=json.dumps(payload), timeout=30
-    )
-
-    if response.status_code != 200:
-      raise Exception(f"Ошибка API Google: {response.text}")
-
-    res_json = response.json()
-    result_text = (
-        res_json.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "{}")
-        .strip()
-    )
+    response = model.generate_content([prompt_text, image])
+    result_text = response.text.strip()
 
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
     elif result_text.startswith("```"):
       result_text = result_text[3:-3].strip()
+
+    import json
 
     data = json.loads(result_text)
 
