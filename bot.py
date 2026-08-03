@@ -1,19 +1,17 @@
 import json
 import os
 from threading import Thread
-import telebot
 import google.generativeai as genai
+import requests
+import telebot
 from flask import Flask
 
-# Получаем ключи безопасно из окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# Используем твой ключ напрямую
+GEMINI_API_KEY = "AQ.Ab8RN6KqG3qQtRTpFZE4o2cjVFjImbU4nY15vdz4hyLw2fPQ"
 
-
-genai.configure(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Создаем простой веб-сервер для Render, чтобы он видел открытый порт
 app = Flask("")
 
 
@@ -46,29 +44,58 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    temp_filename = "temp_receipt.jpg"
-    with open(temp_filename, "wb") as new_file:
-      new_file.write(downloaded_file)
+    # Используем официальный эндпоинт Google AI Studio с передачей ключа в заголовке
+    import base64
 
-    sample_file = genai.upload_file(
-        path=temp_filename, display_name="Receipt"
-    )
+    encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    prompt = (
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+
+    headers = {"Content-Type": "application/json"}
+
+    prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
         ' следующими ключами: "date", "total", "tax_rate", "tax_amount",'
         ' "net_amount", "content", "city", "creditor", "person", "description".'
         " Колонки: TARİH, TUTAR(KDV DAHİL), KDV ORANI (%), KDV TUTARI,"
         " TUTAR(KDV HARİÇ), İÇERİK, ŞEHİR, ALACAKLI, PERSONEL, AÇIKLAMALAR."
-        " Возвращай только чистый JSON без лишнего текста."
+        " Возвращай только чистый JSON без лишнего текста и без markdown-разметки."
     )
 
-    model = genai.GenerativeModel(model_name="gemini-1.5-flash")
-    response = model.generate_content([sample_file, prompt])
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt_text},
+                {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": encoded_image,
+                    }
+                },
+            ]
+        }]
+    }
 
-    result_text = response.text.strip()
+    response = requests.post(
+        url, headers=headers, data=json.dumps(payload), timeout=30
+    )
+
+    if response.status_code != 200:
+      raise Exception(f"Ошибка API Google: {response.text}")
+
+    res_json = response.json()
+    result_text = (
+        res_json.get("candidates", [{}])
+        .get("content", {})
+        .get("parts", [{}])[0]
+        .get("text", "{}")
+        .strip()
+    )
+
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
+    elif result_text.startswith("```"):
+      result_text = result_text[3:-3].strip()
 
     data = json.loads(result_text)
 
@@ -92,7 +119,6 @@ def handle_receipt(message):
     bot.reply_to(message, f"❌ Произошла ошибка: {e}")
 
 
-# Запускаем веб-сервер и бот с защитой от конфликтов
 if __name__ == "__main__":
   t = Thread(target=run_web)
   t.start()
