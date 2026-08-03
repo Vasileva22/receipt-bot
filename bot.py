@@ -1,13 +1,17 @@
-import base64
 import json
 import os
 from threading import Thread
-import requests
+from google import genai
+from google.genai import types
 import telebot
 from flask import Flask
 
+# Получаем токены из переменных окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+# Инициализируем новый официальный клиент Google GenAI
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
@@ -28,14 +32,14 @@ def send_welcome(bot_message):
   bot.reply_to(
       bot_message,
       "Привет! Скинь мне фото чека, а я мгновенно вытащу из него все данные"
-      " через Groq.",
+      " через Gemini.",
   )
 
 
 @bot.message_handler(content_types=["photo", "document"])
 def handle_receipt(message):
   try:
-    bot.reply_to(message, "⏳ Обрабатываю чек через Groq Llama Vision...")
+    bot.reply_to(message, "⏳ Обрабатываю чек через официальный Gemini SDK...")
 
     if message.content_type == "photo":
       file_info = bot.get_file(message.photo[-1].file_id)
@@ -43,14 +47,6 @@ def handle_receipt(message):
       file_info = bot.get_file(message.document.file_id)
 
     downloaded_file = bot.download_file(file_info.file_path)
-    encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
-
-    url = "https://api.groq.com/openai/v1/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-    }
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
@@ -61,37 +57,16 @@ def handle_receipt(message):
         " Возвращай только чистый JSON без лишнего текста и без markdown-разметки."
     )
 
-    payload = {
-        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "text", "text": prompt_text},
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{encoded_image}"
-                    },
-                },
-            ],
-        }],
-        "temperature": 0.1,
-    }
-
-    response = requests.post(
-        url, headers=headers, data=json.dumps(payload), timeout=30
+    # Передаем картинку по новой спецификации через types.Part.from_bytes
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=[
+            types.Part.from_bytes(data=downloaded_file, mime_type="image/jpeg"),
+            prompt_text,
+        ],
     )
 
-    if response.status_code != 200:
-      raise Exception(f"Ошибка API Groq: {response.text}")
-
-    res_json = response.json()
-    result_text = (
-        res_json.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "{}")
-        .strip()
-    )
+    result_text = response.text.strip()
 
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
