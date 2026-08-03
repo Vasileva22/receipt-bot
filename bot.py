@@ -6,13 +6,11 @@ import requests
 import telebot
 from flask import Flask
 
-# Получаем токен Telegram и ключ Groq из переменных окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Простой веб-сервер для поддержания активности на Render
 app = Flask("")
 
 
@@ -45,11 +43,8 @@ def handle_receipt(message):
       file_info = bot.get_file(message.document.file_id)
 
     downloaded_file = bot.download_file(file_info.file_path)
-
-    # Кодируем картинку в base64 для отправки в Groq API
     encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    # Официальный эндпоинт Groq для мультимодальных моделей
     url = "https://api.groq.com/openai/v1/chat/completions"
 
     headers = {
@@ -67,7 +62,7 @@ def handle_receipt(message):
     )
 
     payload = {
-        "model": "meta-llama/llama-3.2-90b-vision-preview",
+        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
         "messages": [{
             "role": "user",
             "content": [
