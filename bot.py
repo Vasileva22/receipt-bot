@@ -45,12 +45,10 @@ def handle_receipt(message):
 
     encoded_image = base64.b64encode(downloaded_file).decode("utf-8")
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    # Передаем ключ классическим способом прямо в URL
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
-    }
+    headers = {"Content-Type": "application/json"}
 
     prompt_text = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
