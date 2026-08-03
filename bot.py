@@ -6,7 +6,6 @@ from google.genai import types
 import telebot
 from flask import Flask
 
-# Получаем токены из переменных окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -57,9 +56,9 @@ def handle_receipt(message):
         " Возвращай только чистый JSON без лишнего текста и без markdown-разметки."
     )
 
-    # Передаем картинку по новой спецификации через types.Part.from_bytes
+    # Используем стабильную модель gemini-2.0-flash
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         contents=[
             types.Part.from_bytes(data=downloaded_file, mime_type="image/jpeg"),
             prompt_text,
