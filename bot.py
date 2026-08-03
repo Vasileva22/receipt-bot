@@ -3,7 +3,6 @@ import os
 import telebot
 import gspread
 import google.generativeai as genai
-from google.oauth2.service_account import Credentials
 
 # Получаем ключи из окружения Render
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -19,17 +18,10 @@ SPREADSHEET_URL = (
     "https://docs.google.com/spreadsheets/d/1IdIGkRbco0NV-sa1fBBb38O3nkzA0gqIvlIfoDA-_Pg/edit?usp=sharing"
 )
 
-# Подключение к таблице через публичный доступ по ссылке (или дефолтный клиент)
-gc = gspread.oauth_from_dict(
-    {}
-)  # Если таблица открыта по ссылке для редакторов, открываем её напрямую:
-# Попробуем открыть через gspread без токена, либо через публичный доступ
-try:
-  # Если таблица доступна всем по ссылке на редактирование
-  client = gspread.Client(auth=None)
-  sheet = client.open_by_url(SPREADSHEET_URL).sheet1
-except Exception as e:
-  print(f"Ошибка подключения к таблице: {e}")
+# Открываем таблицу публично по ссылке (убедись, что в таблице стоит доступ «Все, у кого есть ссылка -> Редактор»)
+gc = gspread.service_account(filename=None)  # Заглушка, но проще открыть через публичный клиент:
+client = gspread.Client(auth=None)
+sheet = client.open_by_url(SPREADSHEET_URL).sheet1
 
 
 @bot.message_handler(commands=["start"])
@@ -46,7 +38,6 @@ def handle_receipt(message):
   try:
     bot.reply_to(message, "⏳ Обрабатываю чек...")
 
-    # Скачиваем файл из Telegram
     if message.content_type == "photo":
       file_info = bot.get_file(message.photo[-1].file_id)
     else:
@@ -54,17 +45,14 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    # Сохраняем временно на сервер
     temp_filename = "temp_receipt.jpg"
     with open(temp_filename, "wb") as new_file:
       new_file.write(downloaded_file)
 
-    # Загружаем файл в Gemini для анализа
     sample_file = genai.upload_file(
         path=temp_filename, display_name="Receipt"
     )
 
-    # Запрос к Gemini для извлечения данных под твои колонки таблицы
     prompt = (
         "Проанализируй этот чек и верни данные строго в формате JSON со"
         ' следующими ключами: "date", "total", "tax_rate", "tax_amount",'
@@ -77,14 +65,12 @@ def handle_receipt(message):
     model = genai.GenerativeModel(model_name="gemini-1.5-flash")
     response = model.generate_content([sample_file, prompt])
 
-    # Парсим ответ от Gemini
     result_text = response.text.strip()
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
 
     data = json.loads(result_text)
 
-    # Формируем строку для вставки в Google Таблицу (по порядку твоих колонок)
     row = [
         data.get("date", ""),
         data.get("total", ""),
@@ -98,9 +84,7 @@ def handle_receipt(message):
         data.get("description", ""),
     ]
 
-    # Добавляем строку в таблицу
     sheet.append_row(row)
-
     bot.reply_to(message, "✅ Чек успешно распознан и добавлен в таблицу!")
 
   except Exception as e:
