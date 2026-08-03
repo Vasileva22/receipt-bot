@@ -1,5 +1,8 @@
+import io
+import json
 import os
 from threading import Thread
+from PIL import Image
 import google.generativeai as genai
 import telebot
 from flask import Flask
@@ -44,10 +47,7 @@ def handle_receipt(message):
 
     downloaded_file = bot.download_file(file_info.file_path)
 
-    # Передаем картинку через официальный объект PIL
-    import io
-    from PIL import Image
-
+    # Открываем картинку через PIL
     image = Image.open(io.BytesIO(downloaded_file))
 
     # Выбираем актуальную модель
@@ -69,8 +69,6 @@ def handle_receipt(message):
       result_text = result_text[7:-3].strip()
     elif result_text.startswith("```"):
       result_text = result_text[3:-3].strip()
-
-    import json
 
     data = json.loads(result_text)
 
