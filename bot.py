@@ -11,7 +11,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
-bot.remove_webhook()
 
 # Создаем простой веб-сервер для Render, чтобы он видел открытый порт
 app = Flask("")
@@ -92,9 +91,10 @@ def handle_receipt(message):
     bot.reply_to(message, f"❌ Произошла ошибка: {e}")
 
 
-# Запускаем веб-сервер в отдельном потоке, чтобы Render был доволен портом
+# Запускаем веб-сервер и бот с защитой от конфликтов
 if __name__ == "__main__":
   t = Thread(target=run_web)
   t.start()
   print("Бот и веб-сервер запущены...")
-  bot.infinity_polling()
+  bot.remove_webhook()
+  bot.infinity_polling(timeout=60, long_polling_timeout=60)
