@@ -18,10 +18,11 @@ SPREADSHEET_URL = (
     "https://docs.google.com/spreadsheets/d/1IdIGkRbco0NV-sa1fBBb38O3nkzA0gqIvlIfoDA-_Pg/edit?usp=sharing"
 )
 
-# Открываем таблицу публично по ссылке (убедись, что в таблице стоит доступ «Все, у кого есть ссылка -> Редактор»)
-gc = gspread.service_account(filename=None)  # Заглушка, но проще открыть через публичный клиент:
-client = gspread.Client(auth=None)
-sheet = client.open_by_url(SPREADSHEET_URL).sheet1
+# Подключаемся к таблице по публичной ссылке на редактирование
+client = gspread.http_client.AuthorizedClient(None)
+# Используем прямой метод открытия через публичный клиент gspread
+gc = gspread.Client(auth=None)
+sheet = gc.open_by_url(SPREADSHEET_URL).sheet1
 
 
 @bot.message_handler(commands=["start"])
