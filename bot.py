@@ -1,7 +1,6 @@
 import json
 import os
 import telebot
-import gspread
 import google.generativeai as genai
 
 # Получаем ключи из окружения Render
@@ -13,31 +12,20 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
-# Ссылка на твою Google Таблицу «Romanya 2026»
-SPREADSHEET_URL = (
-    "https://docs.google.com/spreadsheets/d/1IdIGkRbco0NV-sa1fBBb38O3nkzA0gqIvlIfoDA-_Pg/edit?usp=sharing"
-)
-
-# Подключаемся к таблице по публичной ссылке на редактирование
-client = gspread.http_client.AuthorizedClient(None)
-# Используем прямой метод открытия через публичный клиент gspread
-gc = gspread.Client(auth=None)
-sheet = gc.open_by_url(SPREADSHEET_URL).sheet1
-
 
 @bot.message_handler(commands=["start"])
 def send_welcome(bot_message):
   bot.reply_to(
       bot_message,
-      "Привет! Скинь мне фото или PDF чека, а я заполню таблицу «Romanya"
-      " 2026».",
+      "Привет! Скинь мне фото чека, а я мгновенно вытащу из него все данные"
+      " для таблицы.",
   )
 
 
 @bot.message_handler(content_types=["photo", "document"])
 def handle_receipt(message):
   try:
-    bot.reply_to(message, "⏳ Обрабатываю чек...")
+    bot.reply_to(message, "⏳ Обрабатываю чек через Gemini...")
 
     if message.content_type == "photo":
       file_info = bot.get_file(message.photo[-1].file_id)
@@ -70,26 +58,27 @@ def handle_receipt(message):
     if result_text.startswith("```json"):
       result_text = result_text[7:-3].strip()
 
+    # Красиво форматируем ответ для тебя
     data = json.loads(result_text)
 
-    row = [
-        data.get("date", ""),
-        data.get("total", ""),
-        data.get("tax_rate", ""),
-        data.get("tax_amount", ""),
-        data.get("net_amount", ""),
-        data.get("content", ""),
-        data.get("city", ""),
-        data.get("creditor", ""),
-        data.get("person", ""),
-        data.get("description", ""),
-    ]
+    formatted_answer = (
+        f"✅ **Чек успешно распознан!**\n\n"
+        f"📅 **Дата:** {data.get('date', '')}\n"
+        f"💰 **Сумма (с НДС):** {data.get('total', '')}\n"
+        f"📊 **НДС (%):** {data.get('tax_rate', '')}\n"
+        f"📉 **Сумма НДС:** {data.get('tax_amount', '')}\n"
+        f"💵 **Сумма (без НДС):** {data.get('net_amount', '')}\n"
+        f"📦 **Содержимое:** {data.get('content', '')}\n"
+        f"🏙 **Город:** {data.get('city', '')}\n"
+        f"🏢 **Продавец:** {data.get('creditor', '')}\n"
+        f"👤 **Сотрудник:** {data.get('person', '')}\n"
+        f"📝 **Описание:** {data.get('description', '')}"
+    )
 
-    sheet.append_row(row)
-    bot.reply_to(message, "✅ Чек успешно распознан и добавлен в таблицу!")
+    bot.reply_to(message, formatted_answer, parse_mode="Markdown")
 
   except Exception as e:
-    bot.reply_to(message, f"❌ Произошла ошибка при обработке чека: {e}")
+    bot.reply_to(message, f"❌ Произошла ошибка: {e}")
 
 
 print("Бот запущен...")
